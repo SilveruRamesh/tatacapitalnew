@@ -1,0 +1,70 @@
+<!DOCTYPE>
+<html>
+	<head>
+		<script src="libs/jquery.js" type="text/javascript"></script>
+		<script src="libs/jquery.tmpl.min.js" type="text/javascript"></script>
+		<script src="libs/jquery-ui.min.js" type="text/javascript"></script>
+		<link href="libs/jquery-ui.min.css" rel="stylesheet"></link>
+		
+		<script src="../libs/lodash.min.js"></script>
+		<script src='../libs/anonymousassertion.js'></script>
+		<script src="../kore-bot-sdk-client.js"></script>
+		<script src="chatWindow.js" type="text/javascript"></script>
+		<link href="chatWindow.css" rel="stylesheet"></link>
+		<script type="text/javascript">
+		$(document).on("ready",function(){
+		console.log('came');
+		alert("opened");
+			function assertion(options, callback) {
+
+				// Client has to fill the claims and call the callback.
+				$.ajax({
+					url: "https://qa1-bots.kore.com/api/users/sts",
+					type: 'post',
+					headers: {
+						Authorization: "bearer xyz------"
+					},
+					dataType: 'json',
+					success: function (data) {
+						options.assertion = data.jwt
+						callback(null, options);
+					}
+				})
+			}
+
+			var botOptions = {};
+			botOptions.logLevel = 'debug';
+			botOptions.koreAPIUrl = "https://qa1-bots.kore.com/api/";
+			botOptions.assertionFn = assertion;
+			/*
+			 Below config:(To support the anonymous user in test environments only.)
+			 Case.1:Anonymous User
+			        a. set it to false if the client defined the assertion for Anonymous User.
+			        b. set it to true if the client have not defined the assertion for Anonymous User.
+			 Case.2:Logged-In User
+			        a. set it to false if the client defined the assertion.
+			*/
+			botOptions.test = true;
+			botOptions.koreAnonymousFn = koreAnonymousFn;
+			botOptions.clientId   = "cs-9daac5bd-b113-5b0f-b20e-07b8e0eab158"; // secure client-id
+
+			botOptions.botInfo = {name:"Kore Insurance","_id":"st-7c831468-a866-5eef-9a61-1506b500d0f0"}; // bot name is case sensitive
+			
+			var chatConfig={
+				botOptions:botOptions,
+				allowIframe: true
+			};
+
+			koreBotChat().show(chatConfig);
+			$('.openChatWindow').click(function(){
+				koreBotChat().show(chatConfig);
+			});
+		});
+		</script>
+	</head>
+	<body background="../libs/images/healthcare.jpg">
+		<div id="chatContainer">
+		<button class="openChatWindow">Open Chat Window</button>
+		</div>
+	</body>
+</html>
