@@ -17,7 +17,7 @@
 
 				// Client has to fill the claims and call the callback.
 				$.ajax({
-					url: "https://pilot-bots.kore.com/api/users/sts",
+					url: "https://qa1-bots.kore.com/api/users/sts",
 					type: 'post',
 					headers: {
 						Authorization: "bearer xyz------"
@@ -32,7 +32,7 @@
 
 			var botOptions = {};
 			botOptions.logLevel = 'debug';
-			botOptions.koreAPIUrl = "https://pilot-bots.kore.com/api/";
+			botOptions.koreAPIUrl = "https://qa1-bots.kore.com/api/";
 			botOptions.assertionFn = assertion;
 			/*
 			 Below config:(To support the anonymous user in test environments only.)
