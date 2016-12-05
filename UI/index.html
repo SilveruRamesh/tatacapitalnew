@@ -13,13 +13,11 @@
 		<link href="chatWindow.css" rel="stylesheet"></link>
 		<script type="text/javascript">
 		$(document).on("ready",function(){
-		console.log('came');
-		alert("opened");
 			function assertion(options, callback) {
 
 				// Client has to fill the claims and call the callback.
 				$.ajax({
-					url: "https://qa1-bots.kore.com/api/users/sts",
+					url: "https://pilot-bots.kore.com/api/users/sts",
 					type: 'post',
 					headers: {
 						Authorization: "bearer xyz------"
@@ -34,7 +32,7 @@
 
 			var botOptions = {};
 			botOptions.logLevel = 'debug';
-			botOptions.koreAPIUrl = "https://qa1-bots.kore.com/api/";
+			botOptions.koreAPIUrl = "https://pilot-bots.kore.com/api/";
 			botOptions.assertionFn = assertion;
 			/*
 			 Below config:(To support the anonymous user in test environments only.)
@@ -61,10 +59,39 @@
 			});
 		});
 		</script>
+		<style>
+		
+		#chatContainer{
+		position: absolute;
+    top: 0;
+    right: 0;
+		
+		}
+		.openChatWindow{
+		    float: right;
+    margin: 19px 70px 0 0;
+    border: 1px solid #00a4ff;
+    background: #fff;
+    border-radius: 4px;
+    padding: 8px;
+    color: #009dab;
+	cursor:pointer;
+		
+		}
+		
+		.openChatWindow:hover{
+		border: 1px solid #009dab;
+		}
+		
+		</style>
 	</head>
-	<body background="../libs/images/insurancearrow.jpg">
-		<div id="chatContainer">
-		<button class="openChatWindow">Open Chat Window</button>
+	<body style="width: 100%; height: 100%;  margin:0; padding:0;">
+	<div style="width:100%; z-index:0; height:100%;">
+	    <img style="width: 100%;" src="../libs/images/Healthcare.png"/>
+		
+	</div>
+		<div id="chatContainer" >
+		<button class="openChatWindow" >Talk to Kore Healthcare</button>
 		</div>
 	</body>
 </html>
