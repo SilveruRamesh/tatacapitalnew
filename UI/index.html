@@ -1,7 +1,7 @@
 <!DOCTYPE>
 <html>
 	<head>
-	<title>Tata Capital</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.1, maximum-scale=1.0">
 		<script src="libs/jquery.js" type="text/javascript"></script>
 		<script src="libs/jquery.tmpl.min.js" type="text/javascript"></script>
 		<script src="libs/jquery-ui.min.js" type="text/javascript"></script>
@@ -11,29 +11,36 @@
 		<script src='../libs/anonymousassertion.js'></script>
 		<script src="../kore-bot-sdk-client.js"></script>
 		<script src="chatWindow.js" type="text/javascript"></script>
+		<script src="../libs/emoji.js" type="text/javascript"></script>
+		<script src="../libs/recorder.js" type="text/javascript"></script>
+		<script src="../libs/recorderWorker.js" type="text/javascript"></script>
 		<link href="chatWindow.css" rel="stylesheet"></link>
+		<link href="../libs/emojione.sprites.css" rel="stylesheet"></link>
 		<script type="text/javascript">
 		$(document).on("ready",function(){
 			function assertion(options, callback) {
-
+                 options.assertion =  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE0ODU4Nzg1MzUzMTQsImV4cCI6MTQ4NTk2NDkzNTMxNCwiYXVkIjoiaHR0cHM6Ly9pZHByb3h5LXFhLmtvcmUuY29tL2F1dGhvcml6ZSIsImlzcyI6ImNzLTJhYzUxMzA3LThkMTEtNTVmNC1iNDQyLTJlNmUyNThkZmQ4OCIsInN1YiI6InByYW1vZC5kZXNocGFuZGVAa29yZS5jb20iLCJpc0Fub255bW91cyI6dHJ1ZX0.spTGylN6hTKrrltvbHyLT6BZmmhRpkpySjofdFUPn0k";
+						callback(null, options);
 				// Client has to fill the claims and call the callback.
-				$.ajax({
-					url: "https://devbots.kore.net/api/users/sts",
+				/*$.ajax({
+					url: botOptions.koreAPIUrl+"users/sts",
 					type: 'post',
 					headers: {
-						Authorization: "bearer xyz------"
+						Authorization: botOptions.bearer
 					},
 					dataType: 'json',
+					data: botOptions.data,
 					success: function (data) {
 						options.assertion = data.jwt
 						callback(null, options);
 					}
-				})
+				}) commented as this will be generated via API*/ 
 			}
 
 			var botOptions = {};
 			botOptions.logLevel = 'debug';
-			botOptions.koreAPIUrl = "https://devbots.kore.net/api/";
+			botOptions.koreAPIUrl = "https://devbots.kore.net/api/"; 
+			//botOptions.bearer = "bearer iZrs_PxJ6Jm7U0AlJGqdedqSJQnLrFOehRN83mcVz3GtFwiSg9uplgZBVPOiihtJ"; commented by sunitha
 			botOptions.assertionFn = assertion;
 			/*
 			 Below config:(To support the anonymous user in test environments only.)
@@ -43,11 +50,11 @@
 			 Case.2:Logged-In User
 			        a. set it to false if the client defined the assertion.
 			*/
-			botOptions.test = true;
+			//botOptions.test = true; // invalid
 			botOptions.koreAnonymousFn = koreAnonymousFn;
-			botOptions.clientId   = "cs-fdfc0353-ab75-5371-98ae-1ce0cb28f86f"; // secure client-id
-
-			botOptions.botInfo = {name:"TATA Capital","_id":"st-50abcfaf-a86f-5b6d-b926-551c60c05416"}; // bot name is case sensitive
+			botOptions.clientId   = "cs-2ac51307-8d11-55f4-b442-2e6e258dfd88"; // secure client-id
+			
+			botOptions.botInfo = {name:"TATA CAPITAL Personal Loan","_id":"st-65eabdd4-0fb3-5433-86cc-ef7a8c801e9f"}; // bot name is case sensitive
 			
 			var chatConfig={
 				botOptions:botOptions,
@@ -60,36 +67,9 @@
 			});
 		});
 		</script>
-		<style>
-		
-		#chatContainer{
-		position: absolute;
-    top: 0;
-    right: 0;
-		
-		}
-		.openChatWindow{
-		    float: right;
-    margin: 19px 70px 0 0;
-    border: 1px solid #00a4ff;
-    background: #fff;
-    border-radius: 4px;
-    padding: 8px;
-    color: #009dab;
-	cursor:pointer;
-		
-		}
-		
-		.openChatWindow:hover{
-		border: 1px solid #009dab;
-		}
-		
-		</style>
 	</head>
-	<body style="width: 100%; height: 100%;  margin:0; padding:0;">
-	<div style="width:100%; z-index:0; height:100%;">
-		</div>
-		<div id="chatContainer" >
+	<body>
+		<div id="chatContainer">
 		<button class="openChatWindow">Open Chat Window</button>
 		</div>
 	</body>
