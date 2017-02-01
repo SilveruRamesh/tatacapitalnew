@@ -7,8 +7,9 @@ function koreBotChat() {
     };
     var _botInfo = {};
     var detectScriptTag = /<script\b[^>]*>([\s\S]*?)/gm;
-	var _eventQueue = {};
-	var prevRange, accessToken ,koreAPIUrl,fileToken,fileUploaderCounter = 0,bearerToken='';
+    var _eventQueue = {};
+    var prevRange, accessToken ,koreAPIUrl,fileToken,fileUploaderCounter = 0,_removeAttachments='',globalRecState,bearerToken;
+
     /******************* Mic variable initilization *******************/
     var _exports = {},
     _template, _this = {};
@@ -19,17 +20,18 @@ function koreBotChat() {
     var CONTENT_TYPE = "content-type=audio/x-raw,+layout=(string)interleaved,+rate=(int)16000,+format=(string)S16LE,+channels=(int)1";
 
     var recorderWorkerPath = "../libs/recorderWorker.js";
-    var INTERVAL = 250;
+    var INTERVAL = 250; 
     /***************** Mic initilization code end here ************************/
+
     /*************************** file upload variable *******************************/
     var appConsts ={};
     var attachmentInfo = {};
+    appConsts.CHUNK_SIZE = 1024 * 1024;
     var allowedFileTypes = ["m4a","amr","aac","wav","mp3","mp4","mov","3gp","flv","png","jpg","jpeg","gif","bmp","csv","txt","json","pdf","doc","dot","docx","docm"
             ,"dotx","dotm","xls","xlt","xlm","xlsx","xlsm","xltx","xltm","xlsb","xla","xlam","xll","xlw","ppt","pot","pps","pptx","pptm","potx","potm","ppam",
             "ppsx","ppsm","sldx","sldm","zip","rar","tar","wpd","wps","rtf","msg","dat","sdf","vcf","xml","3ds","3dm","max","obj","ai","eps","ps","svg","indd","pct","accdb",
             "db","dbf","mdb","pdb","sql","apk","cgi","cfm","csr","css","htm","html","jsp","php","xhtml","rss","fnt","fon","otf","ttf","cab","cur","dll","dmp","drv","7z","cbr",
             "deb","gz","pkg","rpm","zipx","bak","avi","m4v","mpg","rm","swf","vob","wmv","3gp2","3g2","asf","asx","srt","wma","mid","aif","iff","m3u","mpa","ra","aiff","tiff"];
-    appConsts.CHUNK_SIZE = 1024 * 1024;
     var filetypes = {}, audio = ['m4a', 'amr', 'wav', 'aac', 'mp3'], video = ['mp4', 'mov', '3gp', 'flv'], image = ['png', 'jpg', 'jpeg'];
     filetypes.audio = audio;
     filetypes.video = video;
@@ -53,40 +55,45 @@ function koreBotChat() {
     kony.ui = {};
     kony.net = {};
     /**************************File upload variable end here **************************/
+
     String.prototype.isNotAllowedHTMLTags = function () {
         var wrapper = document.createElement('div');
         wrapper.innerHTML = this;
+		var wrapperScript = wrapper.querySelector('script');
+		var wrapperLink = wrapper.querySelector('link');
+		var wrapperA = wrapper.querySelector('a');
+		var wrapperImg = wrapper.querySelector('img');
 
         var setFlags = {
             isValid: true,
             key: ''
         };
-        if ($(wrapper).find('script').length) {
+        if (wrapperScript !== null) {
             setFlags.isValid = false;
 
         }
-        if ($(wrapper).find('link').length && $(wrapper).find('link').attr('href').indexOf('script') !== -1) {
-            if(detectScriptTag.test($(wrapper).find('link').attr('href'))) {
+        if (wrapperLink !== null && wrapperLink.href.indexOf('script') !== -1) {
+            if(detectScriptTag.test(wrapperLink.href)) {
                 setFlags.isValid = false;
             } else {
                 setFlags.isValid = true;
             }
         }
-        if ($(wrapper).find('a').length && $(wrapper).find('a').attr('href').indexOf('script') !== -1) {
-            if(detectScriptTag.test($(wrapper).find('a').attr('href'))) {
+        if (wrapperA !== null && wrapperA.href.indexOf('script') !== -1) {
+            if(detectScriptTag.test(wrapperA.href)) {
                 setFlags.isValid = false;
             } else {
                 setFlags.isValid = true;
             }
         }
-        if ($(wrapper).find('img').length && $(wrapper).find('img').attr('src').indexOf('script') !== -1) {
-            if(detectScriptTag.test($(wrapper).find('img').attr('href'))) {
+        if (wrapperImg !== null && wrapperImg.src.indexOf('script') !== -1) {
+            if(detectScriptTag.test(wrapperImg.src)) {
                 setFlags.isValid = false;
             } else {
                 setFlags.isValid = true;
             }
         }
-        if ($(wrapper).find('object').length) {
+        if (wrapper.querySelector('object') !== null) {
             setFlags.isValid = false;
         }
 
@@ -279,7 +286,9 @@ function koreBotChat() {
                 return "<br/>";
             }
             var nextln = regEx.NEWLINE;
-            function linkreplacer(match, p1, offset, string) {
+            //str = xssAttack(str);
+			
+			function linkreplacer(match, p1, offset, string) {
 				var dummyString = string.replace(_regExForMarkdownLink, '[]');
 				if (dummyString.indexOf(match) !== -1){
 					var _link = p1.indexOf('http') < 0 ? 'http://' + match : match, _target;
@@ -290,37 +299,45 @@ function koreBotChat() {
 					return match;
 				}
 			}
+            var nextln = regEx.NEWLINE;
             //check for whether to linkify or not
 			var wrapper1 = document.createElement('div');
 			wrapper1.innerHTML = (str || '').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 			wrapper1.innerHTML = xssAttack(wrapper1.innerHTML);
-			if ($(wrapper1).find('a').attr('href')) {
+			if (wrapper1.getElementsByTagName('a')[0] && wrapper1.getElementsByTagName('a')[0].getAttribute('href')) {
 				str = wrapper1.innerHTML;
 			} else {
 				str = wrapper1.innerHTML.replace(_regExForLink, linkreplacer);
 			}
+
             //Adding target=web for links if authUrl is true
             if (component && component.componentData && component.componentData.bot && component.componentData.bot.authUrl) {
                 var rawHTML = str;
-                var $div = $('<div>').html(rawHTML);
+				var $div = document.createElement('div');
+                $div.innerHTML = rawHTML;
 
-                var _aDivs = $div.find('a');
-                _aDivs.toArray().forEach(function (ele) {
+                var _aDivs = $div.querySelectorAll('a');
+                _aDivs.forEach(function (ele) {
                     ele.href += '&target=web';
-                    $(ele).attr('data-authUrl', ele.href);
+					var authAttr = document.createAttribute("data-authUrl");
+					authAttr.value = ele.href;
+					ele.setAttributeNode(authAttr);
                 });
-                str = $div.html();
+                str = $div.innerHTML;
             }
             //Adding target=web for links if actionUrl is true
             if (component && component.componentData && component.componentData.bot && component.componentData.bot.actionUrl) {
                 var rawHTML_A = str;
-                var $div_A = $('<div>').html(rawHTML_A);
-                var _aDivs_A = $div_A.find('a');
-                _aDivs_A.toArray().forEach(function (ele) {
+				var $div_A = document.createElement('div');
+                $div_A.innerHTML = rawHTML_A;
+                var _aDivs_A = $div_A.querySelectorAll('a');
+                _aDivs_A.forEach(function (ele) {
                     ele.href += '&target=web';
-                    $(ele).attr('data-actionUrl', ele.href);
+					var actionAttr = document.createAttribute("data-actionUrl");
+					actionAttr.value = ele.href;
+					ele.setAttributeNode(actionAttr);
                 });
-                str = $div_A.html();
+                str = $div_A.innerHTML;
             }
             
             return helpers.nl2br(helpers.checkMarkdowns(str));
@@ -373,7 +390,7 @@ function koreBotChat() {
 						var _imgTxt = _matchImage[j].substring(2, _matchImage[j].indexOf(']'));
 						var remainingString = _matchImage[j].substring(_matchImage[j].indexOf(']') + 1).trim();
 						var _imgLink = remainingString.substring(1, remainingString.indexOf(')'));
-						_imgLink = '<img src="' + _imgLink + '" alt="' + _imgTxt + '">';
+						_imgLink = '<img src="' + _imgLink + '" alt="' + _imgTxt + '"/>';
 						var _tempImg = txtArr[i].split(' ');
                         for(var k = 0; k < _tempImg.length; k++) {
                             if (_tempImg[k] === _matchImage[j]) {
@@ -444,11 +461,33 @@ function koreBotChat() {
 			return val;
 		}
     };
-	
 	function isEven(n) {
 		n = Number(n);
 		return n === 0 || !!(n && !(n%2));
 	}
+	
+	function hasClass(el, className) {
+	  if (el.classList)
+		return el.classList.contains(className)
+	  else
+		return !!el.className.match(new RegExp('(\\s|^)' + className + '(\\s|$)'))
+	}
+
+	function addClass(el, className) {
+	  if (el.classList)
+		el.classList.add(className)
+	  else if (!hasClass(el, className)) el.className += " " + className
+	}
+
+	function removeClass(el, className) {
+	  if (el.classList)
+		el.classList.remove(className)
+	  else if (hasClass(el, className)) {
+		var reg = new RegExp('(\\s|^)' + className + '(\\s|$)')
+		el.className=el.className.replace(reg, ' ')
+	  }
+	}
+	
 	function extend(){
 		var rec = function(obj) {
 			var recRes = {};
@@ -481,7 +520,7 @@ function koreBotChat() {
 		return arguments[0];
 	}
 	
-    function chatWindow(cfg) {        
+    function chatWindow(cfg) {
         this.config = {
             "chatTitle": "Kore Bot Chat",
             "container": "body",
@@ -496,26 +535,27 @@ function koreBotChat() {
         this.config = extend(this.config, cfg);
         this.init();
     }
-	
+
     chatWindow.prototype.init = function () {
         var me = this;
-        _botInfo = me.config.botOptions.botInfo;
+        _botInfo = extend({},me.config.botOptions.botInfo);
         me.config.botOptions.botInfo = {chatBot:_botInfo.name,taskBotId :_botInfo._id};
         var tempTitle = _botInfo.name;
         me.config.botMessages = botMessages;
 
         me.config.chatTitle = me.config.botMessages.connecting;
-        var chatWindowHtml = $(me.getChatTemplate()).tmpl(me.config);
-        me.config.chatContainer = chatWindowHtml;
+        var chatWindowHtml = me.getChatTemplate('chatWindowTemplate', me.config);
 
         me.config.chatTitle = tempTitle;
         bot.init(me.config.botOptions);
-        me.render(chatWindowHtml);       
+        me.render(chatWindowHtml);
     };
 
     chatWindow.prototype.destroy = function () {
         var me = this;
-        $('.kore-chat-overlay').hide();
+		if(document.querySelector('.kore-chat-overlay') !== null) {
+			document.querySelector('.kore-chat-overlay').style.display = "";
+		}
         bot.close();
         if (me.config && me.config.chatContainer) {
             me.config.chatContainer.remove();
@@ -524,119 +564,81 @@ function koreBotChat() {
 
     chatWindow.prototype.resetWindow = function() {
         var me = this;
-        me.config.chatContainer.find('.kore-chat-header .header-title').html( me.config.botMessages.reconnecting);
-        me.config.chatContainer.find('.chat-container').html("");
+        me.config.chatContainer.querySelector('.kore-chat-header .header-title').innerHTML = me.config.botMessages.reconnecting;
+        me.config.chatContainer.querySelector('.chat-container').innerHTML = "";
         bot.close();
         bot.init(me.config.botOptions);
     };
 
     chatWindow.prototype.bindEvents = function () {
         var me = this;
-        var _chatContainer = me.config.chatContainer;
-        _chatContainer.draggable({
-                handle: _chatContainer.find(".kore-chat-header .header-title"),
-                containment: "window",
-                scroll: false
-        }).resizable({
-                handles: "n, e, w, s",
-                containment: "html"
-        });
-
-        _chatContainer.off('keyup', '.chatInputBox').on('keyup', '.chatInputBox', function (event) {
-            var _footerContainer = $(me.config.container).find('.kore-chat-footer');
-            var _bodyContainer = $(me.config.container).find('.kore-chat-body');
-            _bodyContainer.css('bottom', _footerContainer.outerHeight());
+		var _chatContainer = me.config.chatContainer;
+		var _chatInputBox = _chatContainer.querySelector('.chatInputBox');
+		var _expandBtn = _chatContainer.querySelector('.expand-btn');
+		var _closeBtn = _chatContainer.querySelector('.close-btn');
+		var _minimizeBtn =  _chatContainer.querySelector('.minimize-btn');
+		var _reloadBtn = _chatContainer.querySelector('.reload-btn');
+		var _buttonTmplContentBox = _chatContainer.querySelector('.buttonTmplContentBox');
+		var _startRecord = _chatContainer.querySelector('.notRecordingMicrophone');
+        var _stopRecord = _chatContainer.querySelector('.recordingMicrophone');
+        var _uploadButton = _chatContainer.querySelector('.attachmentBtn');
+        var _uploadBox = _chatContainer.querySelector('.captureAttachmnts');
+        _chatInputBox.addEventListener('keyup', function (event) {
+            var _footerContainer = me.config.container.querySelector('.kore-chat-footer');
+            var _bodyContainer =me.config.container.querySelector('.kore-chat-body');
+            _bodyContainer.style.bottom = _footerContainer.scrollHeight;
 			prevComposeSelection = window.getSelection();
             prevRange = prevComposeSelection.rangeCount > 0 && prevComposeSelection.getRangeAt(0);
         });
-		_chatContainer.on('click', '.chatInputBox', function (event) {
+		_chatInputBox.addEventListener('click', function (event) {
             prevComposeSelection = window.getSelection();
             prevRange = prevComposeSelection.rangeCount > 0 && prevComposeSelection.getRangeAt(0);
         });
-        _chatContainer.off('click', '.attachments').on('click', '.attachments', function (event) {
-            var attachFileID  = $(this).attr('fileid');
-            $.ajax({type: "GET",
-                url: koreAPIUrl+"1.1/attachment/file/"+attachFileID+"/url",
-                headers: {
-                    Authorization: bearerToken
-                },
-                success: function (response) {
-                    var downloadUrl = response.fileUrl;
-                    if(downloadUrl.indexOf("?") < 0){
-                        downloadUrl +="?download=1";
-                    }else{
-                        downloadUrl +="&download=1";
-                    }
-                    window.open(downloadUrl,'_blank');
-                   //debugger;
-                    /*document.body.appendChild(link);
-                    link.setAttribute("type", "hidden"); // make it hidden if needed
-                    link.download = 'test.xls';
-                    link.href = 'data:application/vnd.ms-excel;utf-8,test';
-                    link.click();*/
-
-                    /*var save = document.createElement('a');
-                    document.body.appendChild(save);
-                    save.href = downloadUrl;
-                    save.target = '_blank';
-                    save.download = 'unknown file';
-                    save.click();*/
-                },
-                error: function (msg) {
-                    console.log("Oops, something went horribly wrong");
-                }
-            });
-        });
-        _chatContainer.off('keydown', '.chatInputBox').on('keydown', '.chatInputBox', function (event) {
-            var _this = $(this);
-            var _footerContainer = $(me.config.container).find('.kore-chat-footer');
-            var _bodyContainer = $(me.config.container).find('.kore-chat-body');
-            _bodyContainer.css('bottom', _footerContainer.outerHeight());
-            if (event.keyCode === 13) {
-                 if($('.upldIndc').is(':visible')){
-                    alert('Wait until file upload is not completed');
-                    return;
-                }
-                event.preventDefault();
-                me.sendMessage(_this,attachmentInfo);
-                return;
-            }
-        });
-        _chatContainer.off('click', '.notRecordingMicrophone').on('click', '.notRecordingMicrophone', function (event) {
+        _startRecord.addEventListener('click', function (event) {
             micEnable();
-        });        
-        _chatContainer.off('click', '.recordingMicrophone').on('click', '.recordingMicrophone', function (event) {
+        });
+        _stopRecord.addEventListener('click', function (event) {
             stop();
         });
-        _chatContainer.off('click', '.attachmentBtn').on('click', '.attachmentBtn', function (event) {
+        _uploadButton.addEventListener('click', function (event) {
             if(fileUploaderCounter == 1){
                 alert('You can upload only one file');
                 return;
             }
-            if($('.upldIndc').is(':visible')){
+            /*if(document.getElementsByClassName('upldIndc').style.display){
                 alert('Wait until file upload is not completed');
                 return;
-            }
-            $('#captureAttachmnts').trigger('click');
+            }*/
+            document.getElementById('captureAttachmnts').click();
         });
-        _chatContainer.off('click', '.removeAttachment').on('click', '.removeAttachment', function (event) {
-           $(this).parents('.msgCmpt').remove();
-           $('.kore-chat-window').removeClass('kore-chat-attachment');
-           fileUploaderCounter  = 0;
-           attachmentInfo = {};
-           document.getElementById("captureAttachmnts").value = "";
-        });
-        _chatContainer.off('change', '#captureAttachmnts').on('change', '#captureAttachmnts', function (event) {            
-            var file = $('#captureAttachmnts').prop('files')[0];
+        _uploadBox.addEventListener('change', function (event) {            
+            var file = document.getElementById('captureAttachmnts').files[0];
             if (file && file.size) {
                 if (file.size > filetypes.file.limit.size) {
                     alert(filetypes.file.limit.msg);
                     return;
                 }
             }
+            /*if (Object.keys(_scope.components).length === 6) {
+                showbootBox(i18nLangString.teamscommon.moreThan6Comp);
+                return;
+            }*/
+            //_scope.cnvertFiles(file);
             cnvertFiles(this,file);
         });
-        _chatContainer.off('paste', '.chatInputBox').on('paste', '.chatInputBox', function (event) {
+		
+        _chatInputBox.addEventListener('keydown', function (event) {
+            var _footerContainer = me.config.container.querySelector('.kore-chat-footer');
+            var _bodyContainer =me.config.container.querySelector('.kore-chat-body');
+            _bodyContainer.style.bottom = _footerContainer.scrollHeight;
+            if (event.keyCode === 13) {
+                event.preventDefault();
+                me.sendMessage(_chatInputBox,attachmentInfo);
+                return;
+            }
+        });
+        
+        _chatInputBox.addEventListener('paste', function (event) {
             event.preventDefault();
 			var _this = document.getElementsByClassName("chatInputBox");
             var _clipboardData = event.clipboardData || (event.originalEvent && event.originalEvent.clipboardData) || window.clipboardData;
@@ -648,132 +650,93 @@ function koreBotChat() {
 			setTimeout(function(){
 				setCaretEnd(_this);
 			}, 100);
+			
         });
-        _chatContainer.off('click', '.sendChat').on('click', '.sendChat', function (event) {
-            var _footerContainer = $(me.config.container).find('.kore-chat-footer');
-            me.sendMessage(_footerContainer.find('.chatInputBox'));
-        });
-        
-        _chatContainer.off('click', 'li a').on('click','li a',function(e){            
-            e.preventDefault();
-            var a_link = $(this).attr('href');
-			var _trgt = $(this).attr('target');
-			if (_trgt === "_self") {
-				callListener("provideVal", {link: a_link} );
-				return;
-			}
-			if(me.config.allowIframe === true){
-                me.openPopup(a_link);
-            }
-            else{
-                var _tempWin = window.open(a_link,"_blank");
-            }
-        });
-		_chatContainer.off('click', '.buttonTmplContentBox li,.listTmplContentChild .buyBtn,.viewMoreList .viewMore,.listItemPath').on('click','.buttonTmplContentBox li,.listTmplContentChild .buyBtn, .viewMoreList .viewMore,.listItemPath',function(e){
-            e.preventDefault();
-            var type = $(this).attr('type');
-			if(type == "postback" || type == "text"){
-				$('.chatInputBox').text($(this).attr('value'));
-				me.sendMessage($('.chatInputBox'));
-			}else if(type == "url" || type == "web_url"){
-				var a_link = $(this).attr('url');
-				if(a_link.indexOf("http:") < 0 && a_link.indexOf("https:") < 0){
-					a_link = "http:////" + a_link;
-				}
-				var _tempWin = window.open(a_link,"_blank");
-			}
-        });		
-        _chatContainer.off('click', '.close-btn').on('click', '.close-btn', function (event) {
+
+        _closeBtn.addEventListener('click', function (event) {
             me.destroy();
         });
 
-        _chatContainer.off('click', '.minimize-btn').on('click', '.minimize-btn', function (event) {
+        _minimizeBtn.addEventListener('click', function (event) {
             if (me.minimized === true) {
-                _chatContainer.removeClass("minimize");
+				removeClass(_chatContainer, "minimize");
                 me.minimized = false;
-                if(me.expanded === false){
-                    _chatContainer.draggable({
-                        handle: _chatContainer.find(".kore-chat-header .header-title"),
-                        containment: "window",
-                        scroll: false
-                    });
-                }
             } else
             {
-                _chatContainer.addClass("minimize");
-                if(me.expanded === false && _chatContainer.hasClass("ui-draggable")) {
-                    _chatContainer.draggable("destroy");
-                }
-                _chatContainer.find('.minimized-title').html("Talk to "+ me.config.chatTitle);
+                addClass(_chatContainer, "minimize");
+                _chatContainer.querySelector('.minimized-title').innerHTML = "Talk to "+ me.config.chatTitle;
                 me.minimized = true;
             }
         });
         
-        _chatContainer.off('click', '.expand-btn').on('click', '.expand-btn', function (event) {
-            if($('.kore-chat-overlay').length === 0) {
-                $(me.config.container).append('<div class="kore-chat-overlay"></div>');
+        _expandBtn.addEventListener('click', function (event) {
+            if(document.querySelector('.kore-chat-overlay') === null) {
+				var _divOverlay = document.createElement('div');
+				_divOverlay.className = "kore-chat-overlay";
+                me.config.container.appendChild(_divOverlay);
+				
+				_divOverlay.addEventListener('click',function(){
+					if(me.expanded === true){
+						_expandBtn.click();
+					}
+				});
             }
+			var _chatOverlay = me.config.container.querySelector('.kore-chat-overlay');
             if (me.expanded === true) {
-                $('.kore-chat-overlay').hide();
-                $(this).attr('title',"Expand");
-                _chatContainer.removeClass("expanded");
+                _chatOverlay.style.display = "none";
+                _expandBtn.title = "Expand";
+                removeClass(_chatContainer, "expanded");
                 me.expanded = false;
-                _chatContainer.draggable({
-                    handle: _chatContainer.find(".kore-chat-header .header-title"),
-                    containment: "window",
-                    scroll: false
-                }).resizable({
-                        handles: "n, e, w, s",
-                        containment: "html"
-                });
             } else {
-                $('.kore-chat-overlay').show();
-                $(this).attr('title',"Collapse");
-                _chatContainer.addClass("expanded");
-                _chatContainer.draggable("destroy").resizable("destroy");
+                _chatOverlay.style.display = "block";;
+                _expandBtn.title = "Collapse";
+                addClass(_chatContainer, "expanded");
                 me.expanded = true;
             }
-            var container_pos_left = _chatContainer.position().left + _chatContainer.width();
-            if(container_pos_left > $(window).width()){
-                _chatContainer.css('left',_chatContainer.position().left - (container_pos_left - $(window).width() + 10)  + "px" );
-            }
         });
-        $('body').on('click','.kore-chat-overlay, .kore-chat-window .minimize-btn',function(){
+		
+		document.querySelector('body').querySelector('.kore-chat-window .minimize-btn').addEventListener('click',function(){
             if(me.expanded === true){
-                $('.kore-chat-window .expand-btn').trigger('click');
+                _expandBtn.click();
             }
         });
         
-        _chatContainer.off('click', '.minimized').on('click', '.minimized,.minimized-title', function (event) {
-            _chatContainer.removeClass("minimize");
+        _chatContainer.querySelector('.minimized').addEventListener('click', function (event) {
+            removeClass(_chatContainer, "minimize");
             me.minimized = false;
-            _chatContainer.draggable({
-                handle: _chatContainer.find(".kore-chat-header .header-title"),
-                containment: "window",
-                scroll: false
-            });
+        });
+		_chatContainer.querySelector('.minimized-title').addEventListener('click', function (event) {
+            removeClass(_chatContainer, "minimize");
+            me.minimized = false;
         });
 
-        _chatContainer.off('click', '.reload-btn').on('click', '.reload-btn',function(event){
-            $(this).addClass("disabled").prop('disabled',true);
+        _reloadBtn.addEventListener('click', function(event){			
+            addClass(_reloadBtn, "disabled");
+			_reloadBtn.disabled = true;
             me.resetWindow();
         });
+		
         bot.on("open", function (response) {
             accessToken = me.config.botOptions.accessToken;
-            var _chatInput = _chatContainer.find('.kore-chat-footer .chatInputBox');
-            _chatContainer.find('.kore-chat-header .header-title').html(me.config.chatTitle).attr('title',me.config.chatTitle);
-            _chatContainer.find('.kore-chat-header .disabled').prop('disabled',false).removeClass("disabled");
-            _chatInput.focus();
+			var _botTitle = _chatContainer.querySelector('.kore-chat-header .header-title');
+			var _reconnectEl = _chatContainer.querySelector('.kore-chat-header .disabled');
+            _botTitle.innerHTML = _botTitle.title = me.config.chatTitle;
+			
+			if(_reconnectEl !== null){
+				_reconnectEl.disabled = false;
+				removeClass(_reconnectEl, "disabled");
+			}
+            _chatInputBox.focus();
         });
 
         bot.on("message", function (message) {
             if(me.popupOpened === true){
-                $('.kore-auth-popup .close-popup').trigger("click");
+                document.querySelector('.kore-auth-popup .close-popup').click();
             }
             var tempData = JSON.parse(message.data);
 
             if (tempData.from === "bot" && tempData.type === "bot_response")
-            {	
+            {
 				if(tempData.message[0]){
 					tempData.message[0].cInfo.body = window.emojione.shortnameToImage(tempData.message[0].cInfo.body);
 					if(tempData.message[0].component && !tempData.message[0].component.payload.text ) {
@@ -782,13 +745,13 @@ function koreBotChat() {
 						}catch(err){
 							tempData.message[0].component = tempData.message[0].component.payload;
 						}
-					}
-				}				
+					}					
+				}
                 me.renderMessage(tempData);
             }
             else if(tempData.from === "self" && tempData.type === "user_message"){
                 var tempmsg = tempData.message;
-				var msgData = {};
+                var msgData = {};
 				if (tempmsg && tempmsg.attachments && tempmsg.attachments[0] && tempmsg.attachments[0].fileId) {
 					msgData = {
 						'type': "currentUser",
@@ -817,26 +780,27 @@ function koreBotChat() {
     
     chatWindow.prototype.bindIframeEvents = function(authPopup){
         var me = this;
-        authPopup.on('click','.close-popup',function(){
-           $(this).closest('.kore-auth-popup').remove();
-           $('.kore-auth-layover').remove();
+        authPopup.querySelector('.close-popup').addEventListener('click', function(){
+           authPopup.remove();
            me.popupOpened = false;
         });
-        
-        var ifram = authPopup.find('iframe')[0];
-        
-        ifram.addEventListener('onload',function(){
-            console.log(this);            
-        },true);
     };
     
     chatWindow.prototype.render = function (chatWindowHtml) {
         var me = this;
-        $(me.config.container).append(chatWindowHtml);
+		var _div = document.createElement('div');
+		_div.innerHTML = chatWindowHtml;
+		me.config.container = document.querySelector(me.config.container);
+		if(me.config.container === null) {
+			me.config.container = document.querySelector('body');
+		}
+        me.config.container.appendChild(_div);
+		
+		me.config.chatContainer = document.getElementById('koreChatWindow');
 
-        if (me.config.container !== "body") {
-            $(me.config.container).addClass('pos-relative');
-            $(me.config.chatContainer).addClass('pos-absolute');
+        if (me.config.container.localName !== "body") {
+            addClass(me.config.container,'pos-relative');
+            addClass(me.config.container, 'pos-absolute');
         }
 
         me.bindEvents();
@@ -844,11 +808,12 @@ function koreBotChat() {
 
     chatWindow.prototype.sendMessage = function (chatInput) {
         var me = this;
-        if (chatInput.text().trim() === "" && $('.attachment').html().trim().length == 0) {
+        if (chatInput.textContent.trim() === "" && document.getElementsByClassName('attachment')[0].innerHTML.length == 0) {
             return;
         }
-        var _bodyContainer = $(me.config.chatContainer).find('.kore-chat-body');
-        var _footerContainer = $(me.config.chatContainer).find('.kore-chat-footer');
+		
+		var _footerContainer = me.config.container.querySelector('.kore-chat-footer');
+        var _bodyContainer =me.config.container.querySelector('.kore-chat-body');
         var clientMessageId = new Date().getTime();
         var msgData = {};
         fileUploaderCounter = 0;
@@ -858,23 +823,25 @@ function koreBotChat() {
                 "message": [{
                     'type': 'text',
                     'cInfo': {
-                        'body':chatInput.html(),
+                        'body':chatInput.innerHTML,
                         'attachments':[attachmentInfo]
                     },
                     'clientMessageId': clientMessageId
                 }],
                 "createdOn": clientMessageId
             };
-            $('.attachment').html('');
-            $('.kore-chat-window').removeClass('kore-chat-attachment');
+            document.getElementsByClassName('attachment')[0].innerHTML = '';            
             document.getElementById("captureAttachmnts").value = "";
+            document.getElementsByClassName('kore-chat-window')[0].classList.remove('kore-chat-attachment');
         }else{
 			attachmentInfo = {};
             msgData = {
                 'type': "currentUser",
                 "message": [{
                     'type': 'text',
-                    'cInfo': {'body':chatInput.html()},
+                    'cInfo': {
+                        'body':chatInput.innerHTML
+                    },
                     'clientMessageId': clientMessageId
                 }],
                 "createdOn": clientMessageId
@@ -883,293 +850,472 @@ function koreBotChat() {
 
         var messageToBot = {};
         messageToBot["clientMessageId"] = clientMessageId;
-        messageToBot["message"] = {body: chatInput.text().trim(), attachments: [attachmentInfo]};
+        messageToBot["message"] = {body: chatInput.textContent.trim(), attachments: [attachmentInfo]};
         messageToBot["resourceid"] = '/bot.message';
 		attachmentInfo = {};
         bot.sendMessage(messageToBot, function messageSent() {
 
         });
-        chatInput.html("");
-        _bodyContainer.css('bottom', _footerContainer.outerHeight());
+        chatInput.innerHTML = "";       
+        _bodyContainer.style.bottom = _footerContainer.scrollHeight;
 		if (msgData && msgData.message && msgData.message[0].cInfo && msgData.message[0].cInfo.body) {
 			msgData.message[0].cInfo.body = helpers.convertMDtoHTML(msgData.message[0].cInfo.body);
 		}
-        $('.typingIndicatorContent').css('display','block');            
-
+        document.getElementsByClassName('typingIndicatorContent')[0].style.display = 'block';
         me.renderMessage(msgData);
     };
 
     chatWindow.prototype.renderMessage = function (msgData) {
-        var me = this, messageHtml = '',extension ='';
+        var me = this,messageHtml = '',extension;
         if (msgData.type==="bot_response"){
             setTimeout(function(){
-                 $('.typingIndicator').css('background-image',"url("+msgData.icon+")");
+                 document.getElementsByClassName('typingIndicator')[0].style.background = "url("+msgData.icon+")";
             },500);
             setTimeout(function(){
-                $('.typingIndicatorContent').css('display','none');
+                document.getElementsByClassName('typingIndicatorContent')[0].style.display ='none';
             },500) 
         }
-        var _chatContainer = $(me.config.chatContainer).find('.chat-container');
-        if(msgData.message && msgData.message[0] && msgData.message[0].cInfo.attachments){
-            extension = strSplit(msgData.message[0].cInfo.attachments[0].fileName);
+        var _chatContainer = me.config.chatContainer.querySelector('.chat-container');
+		if(msgData.message[0] && msgData.message[0].cInfo.attachments){
+            extension = strSplit(msgData.message[0].cInfo.attachments[0].fileName)
         }
-		if(msgData.message[0] && msgData.message[0].component && msgData.message[0].component.payload && msgData.message[0].component.payload.template_type == "button"){
-			messageHtml = $(me.getChatTemplate("templatebutton")).tmpl({
-				'msgData': msgData,
-				'helpers':helpers,
-                'extension': extension
-			});
+        if(msgData.message[0] && msgData.message[0].component && msgData.message[0].component.payload && msgData.message[0].component.payload.template_type == "button"){
+			messageHtml = me.getChatTemplate("templatebutton", msgData);
 		}
 		else if(msgData.message[0] && msgData.message[0].component && msgData.message[0].component.payload && msgData.message[0].component.payload.template_type == "list"){
-			messageHtml = $(me.getChatTemplate("templatelist")).tmpl({
-				'msgData': msgData,
-				'helpers':helpers,
-                'extension': extension
-			});
-		}
-		else if(msgData.message[0] && msgData.message[0].component && msgData.message[0].component.payload && msgData.message[0].component.payload.template_type == "quick_replies"){
-			messageHtml = $(me.getChatTemplate("templatequickreply")).tmpl({
-				'msgData': msgData,
-				'helpers':helpers,
-                'extension': extension
-			});
+			messageHtml = me.getChatTemplate("templatelist", msgData);
+		}else if(msgData.message[0] && msgData.message[0].component && msgData.message[0].component.payload && msgData.message[0].component.payload.template_type == "quick_replies"){
+			messageHtml = me.getChatTemplate("templatequickreply", msgData);
 		}else{
-			messageHtml = $(me.getChatTemplate("message")).tmpl({
-				'msgData': msgData,
-				'helpers':helpers,
-                'extension': extension
+			messageHtml = me.getChatTemplate("message", msgData,extension);
+		}
+
+        _chatContainer.innerHTML += messageHtml;
+		if(_chatContainer.querySelectorAll('li a').length > 0) {
+			_chatContainer.querySelectorAll('li a').item(function(ele){
+				ele.addEventListener('click',function(e){
+					e.preventDefault();
+					var a_link = this.href;
+					var _trgt = this.target;
+					if (_trgt === "_self") {
+						callListener("provideVal", {link: a_link} );
+						return;
+					}
+					if(me.config.allowIframe === true){
+						me.openPopup(a_link);
+					}
+					else{
+						var _tempWin = window.open(a_link,"_blank");
+					}
+				});
 			});
 		}
-        _chatContainer.append(messageHtml);
-
-        //me.formatMessages(messageHtml);
-        _chatContainer.animate({
-            scrollTop: _chatContainer.prop("scrollHeight")
-        }, 0);
+		if(_chatContainer.querySelectorAll('.sendClickReq').length > 0) {			
+			for (var i = 0; i < _chatContainer.querySelectorAll('.sendClickReq').length; i++){
+				var evt = _chatContainer.querySelectorAll('.sendClickReq')[i];
+				evt.addEventListener('click',function(){
+					var _this = this;
+					me.templateBtnClick(_this, me);
+				});
+			}
+		}
+        if(_chatContainer.querySelectorAll('.attachments').length > 0) {           
+            for (var i = 0; i < _chatContainer.querySelectorAll('.attachments').length; i++){
+                var evt = _chatContainer.querySelectorAll('.attachments')[i];
+                evt.addEventListener('click',function(){
+                    var _this = this;
+                    me.downloadClickFile(_this, me);
+                });
+            }
+        }
+        _chatContainer.scrollTop = _chatContainer.scrollHeight;
     };
-
-    chatWindow.prototype.formatMessages = function (msgContainer){
-    /*adding target to a tags */
-        $(msgContainer).find('a').attr('target','_blank');
+    chatWindow.prototype.downloadClickFile = function(_this,me){
+        var attachFileID  = _this.getAttribute('fileid');
+        var xhttp=new XMLHttpRequest();
+        xhttp.onreadystatechange = function(response) {
+            if (this.readyState == 4 && this.status == 200) {
+                var downloadUrl = JSON.parse(this.response);
+                var url = downloadUrl.fileUrl;
+                if(url.indexOf("?") < 0){
+                    url +="?download=1";
+                }else{
+                    url +="&download=1";
+                }
+                window.open(url,'_blank');
+                /*var save = document.createElement('a');
+                save.href = url;
+                save.target = '_blank';
+                save.download = 'unknown file';
+                save.click();*/
+            }
+        };        
+        xhttp.open("GET", koreAPIUrl+"1.1/attachment/file/"+attachFileID+"/url", true);
+        xhttp.setRequestHeader('Authorization', bearerToken);
+        xhttp.send();        
     };
     
+    chatWindow.prototype.templateBtnClick = function(_this,me){
+		var type = _this.getAttribute('type');
+		if(type == "postback" || type == "text"){
+			document.getElementsByClassName('chatInputBox').textContent = _this.getAttribute('value');
+			document.getElementsByClassName('chatInputBox').innerHTML = _this.getAttribute('value');
+			setTimeout(function(){
+				me.sendMessage(document.getElementsByClassName('chatInputBox'));
+			},100);
+		}else if(type == "url" || type == "web_url"){
+			var a_link = _this.getAttribute('url');
+			if(a_link.indexOf("http:") < 0 && a_link.indexOf("https:") < 0){
+				a_link = "http://" + a_link;
+			}
+			var _tempWin = window.open(a_link,"_blank");
+		}
+	};
     chatWindow.prototype.openPopup = function(link_url){
         var me = this;
-        var popupHtml = $(me.getChatTemplate("popup")).tmpl({
-            "link_url":link_url
-        });
-        $(me.config.container).append(popupHtml);
+        var popupHtml = me.getChatTemplate("popup", link_url);
+							
+		var _div = document.createElement('div');
+		_div.className = "kore-auth-layover";
+		_div.innerHTML = popupHtml;
+		
+        me.config.container.appendChild(_div);
         me.popupOpened = true;
-        me.bindIframeEvents($(popupHtml));
+        me.bindIframeEvents(_div);
     };
 
-    chatWindow.prototype.getChatTemplate = function (tempType) {
-        var chatFooterTemplate =
-                '<div class="footerContainer pos-relative"> \
-			<div class="chatInputBox" contenteditable="true" placeholder="${botMessages.message}"></div> \
-            <div class="attachment"></div> \
-            <div class="sdkFooterIcon microphoneBtn"> \
-                <button class="notRecordingMicrophone"> \
-                    <i class="fa fa-microphone fa-lg"></i> \
-                </button> \
-                <button class="recordingMicrophone"> \
-                    <i class="fa fa-microphone fa-lg"></i> \
-                    <img src="../libs/img/audio-record.gif" style="height:10px;"> \
-                </button> \
-                <div id="textFromServer"></div> \
-            </div> \
-            <div class="sdkFooterIcon"> \
-                <button class="sdkAttachment attachmentBtn"> \
-                    <i class="fa fa fa-paperclip"></i> \
-                </button> \
-                <input type="file" name="Attachment" class="filety" id="captureAttachmnts"> \
-            </div> \
-			<div class="chatSendMsg">Press enter to send</div> \
-		</div>';
-
-        var chatWindowTemplate = '<script id="chat_window_tmpl" type="text/x-jqury-tmpl"> \
-			<div class="kore-chat-window"> \
-                                <div class="minimized-title"></div> \
-                                <div class="minimized"><span class="messages"></span></div> \
-				<div class="kore-chat-header"> \
-					<div class="header-title" title="${chatTitle}">${chatTitle}</div> \
-					<div class="chat-box-controls"> \
-                                                <button class="reload-btn" title="Reconnect"><span></span></button> \
-						<button class="minimize-btn" title="Minimize">&minus;</button> \
-                                                <button class="expand-btn" title="Expand"><span></span></button>\
-						<button class="close-btn" title="Close">&times;</button> \
-					</div> \
-				</div> \
-				<div class="kore-chat-body"> \
-					<ul class="chat-container"></ul> \
-				</div> \
-                <div class="typingIndicatorContent"><div class="typingIndicator"></div><img src="../libs/img/3dot.gif"></div> \
-				<div class="kore-chat-footer">' + chatFooterTemplate + '</div> \
-			</div> \
-		</script>';
-
-        var msgTemplate = ' <script id="chat_message_tmpl" type="text/x-jqury-tmpl"> \
-			{{if msgData.message}} \
-				{{each(key, msgItem) msgData.message}} \
-					{{if msgItem.cInfo && msgItem.type === "text"}} \
-						<li {{if msgData.type !== "bot_response"}}id="msg_${msgItem.clientMessageId}"{{/if}} class="{{if msgData.type === "bot_response"}}fromOtherUsers{{else}}fromCurrentUser{{/if}} {{if msgData.icon}}with-icon{{/if}}"> \
-							{{if msgData.createdOn}}<div class="extra-info">${helpers.formatDate(msgData.createdOn)}</div>{{/if}} \
-							{{if msgData.icon}}<div class="profile-photo"> <div class="user-account avtar" style="background-image:url(${msgData.icon})"></div> </div> {{/if}} \
-							<div class="messageBubble">\
-								<div>{{if msgData.type === "bot_response"}} {{html helpers.convertMDtoHTML(msgItem.cInfo.body)}} {{else}} {{html helpers.convertMDtoHTML(msgItem.cInfo.body)}} {{/if}} </div>\
-								{{if msgItem.cInfo && msgItem.cInfo.emoji}} \
-									<span class="emojione emojione-${msgItem.cInfo.emoji[0].code}">${msgItem.cInfo.emoji[0].title}</span> \
-								{{/if}} \
-                                {{if msgItem.cInfo.attachments}} \
-                                    <div class="msgCmpt attachments" fileid="${msgItem.cInfo.attachments[0].fileId}"> \
-                                        <div class="uploadedFileIcon"> \
-                                            {{if msgItem.cInfo.attachments[0].fileType == "image"}} \
-                                                <span class="icon cf-icon icon-photos_active"></span> \
-                                            {{else msgItem.cInfo.attachments[0].fileType == "audio"}}\
-                                                <span class="icon cf-icon icon-files_audio"></span> \
-                                            {{else msgItem.cInfo.attachments[0].fileType == "video"}} \
-                                                <span class="icon cf-icon icon-video_active"></span> \
-                                            {{else}} \
-                                                {{if extension[1]=="xlsx" || extension[1]=="xls" || extension[1]=="docx" || extension[1]=="doc" || extension[1]=="pdf" || extension[1]=="ppsx" || extension[1]=="pptx" || extension[1]=="ppt" || extension[1]=="zip" || extension[1]=="rar"}}\
-                                                    <span class="icon cf-icon icon-files_${extension[1]}"></span> \
-                                                {{else extension[1]}}\
-                                                    <span class="icon cf-icon icon-files_other_doc"></span> \
-                                                {{/if}}\
-                                            {{/if}}\
-                                        </div> \
-                                        <div class="curUseruploadedFileName">${msgItem.cInfo.attachments[0].fileName}</div> \
-                                    </div> \
-                                {{/if}} \
-							</div> \
-						</li> \
-					{{/if}} \
-				{{/each}} \
-			{{/if}} \
-		</scipt>';
+    chatWindow.prototype.getChatTemplate = function (tempType, tempData, extension) {
         
-        var popupTemplate = '<script id="kore_popup_tmpl" type="text/x-jquery-tmpl"> \
-                <div class="kore-auth-layover">\
-                    <div class="kore-auth-popup"> \
-                        <div class="popup_controls"><span class="close-popup" title="Close">&times;</span></div> \
-                        <iframe id="authIframe" src="${link_url}"></iframe> \
-                    </div> \
-                </div>\
-        </script>';
-		var buttonTemplate = '<script id="chat_message_tmpl" type="text/x-jqury-tmpl"> \
-			{{if msgData.message}} \
-				<li {{if msgData.type !== "bot_response"}}id="msg_${msgItem.clientMessageId}"{{/if}} class="{{if msgData.type === "bot_response"}}fromOtherUsers{{else}}fromCurrentUser{{/if}} with-icon"> \
-					<div class="buttonTmplContent"> \
-						{{if msgData.createdOn}}<div class="extra-info">${helpers.formatDate(msgData.createdOn)}</div>{{/if}} \
-						{{if msgData.icon}}<div class="profile-photo"> <div class="user-account avtar" style="background-image:url(${msgData.icon})"></div> </div> {{/if}} \
-						<ul class="buttonTmplContentBox">\
-							<li class="buttonTmplContentHeading"> \
-								{{if msgData.type === "bot_response"}} {{html helpers.convertMDtoHTML(msgData.message[0].component.payload.text)}} {{else}} {{html helpers.convertMDtoHTML(msgData.message[0].component.payload.text)}} {{/if}} \
-								{{if msgData.message[0].cInfo && msgData.message[0].cInfo.emoji}} \
-									<span class="emojione emojione-${msgData.message[0].cInfo.emoji[0].code}">${msgData.message[0].cInfo.emoji[0].title}</span> \
-								{{/if}} \
-							</li>\
-							{{each(key, msgItem) msgData.message[0].component.payload.buttons}} \
-								<li {{if msgItem.payload}}value="${msgItem.payload}"{{/if}} {{if msgItem.url}}url="${msgItem.url}"{{/if}} class="buttonTmplContentChild" data-value="${msgItem.value}" type="${msgItem.type}">\
-									${msgItem.title}\
-								</li> \
-							{{/each}} \
-						</ul>\
-					</div>\
-				</li> \
-			{{/if}} \
-		</scipt>';
-		var quickReplyTemplate = '<script id="chat_message_tmpl" type="text/x-jqury-tmpl"> \
-			{{if msgData.message}} \
-				<li {{if msgData.type !== "bot_response"}}id="msg_${msgItem.clientMessageId}"{{/if}} class="{{if msgData.type === "bot_response"}}fromOtherUsers{{else}}fromCurrentUser{{/if}} with-icon"> \
-					<div class="buttonTmplContent"> \
-						{{if msgData.createdOn}}<div class="extra-info">${helpers.formatDate(msgData.createdOn)}</div>{{/if}} \
-						{{if msgData.icon}}<div class="profile-photo"> <div class="user-account avtar" style="background-image:url(${msgData.icon})"></div> </div> {{/if}} \
-						<ul class="buttonTmplContentBox">\
-							{{if msgData.message[0].component.payload.text}} \
-								<li class="buttonTmplContentHeading"> \
-									{{if msgData.type === "bot_response"}} {{html helpers.convertMDtoHTML(msgData.message[0].component.payload.text)}} {{else}} {{html helpers.convertMDtoHTML(msgData.message[0].component.payload.text)}} {{/if}} \
-									{{if msgData.message[0].cInfo && msgData.message[0].cInfo.emoji}} \
-										<span class="emojione emojione-${msgData.message[0].cInfo.emoji[0].code}">${msgData.message[0].cInfo.emoji[0].title}</span> \
-									{{/if}} \
-								</li>\
-							{{/if}} \
-							{{each(key, msgItem) msgData.message[0].component.payload.quick_replies}} \
-								<li {{if msgItem.payload}}value="${msgItem.payload}"{{/if}} class="quickReply buttonTmplContentChild" type="${msgItem.content_type}">\
-									{{if msgItem.image_url}}<img src="${msgItem.image_url}">{{/if}} ${msgItem.title}\
-								</li> \
-							{{/each}} \
-						</ul>\
-					</div>\
-				</li> \
-			{{/if}} \
-		</scipt>';
-		var listTemplate = '<script id="chat_message_tmpl" type="text/x-jqury-tmpl"> \
-			{{if msgData.message}} \
-				<li {{if msgData.type !== "bot_response"}}id="msg_${msgItem.clientMessageId}"{{/if}} class="{{if msgData.type === "bot_response"}}fromOtherUsers{{else}}fromCurrentUser{{/if}} with-icon"> \
-					<div class="listTmplContent"> \
-						{{if msgData.createdOn}}<div class="extra-info">${helpers.formatDate(msgData.createdOn)}</div>{{/if}} \
-						{{if msgData.icon}}<div class="profile-photo"> <div class="user-account avtar" style="background-image:url(${msgData.icon})"></div> </div> {{/if}} \
-						<ul class="listTmplContentBox"> \
-							{{if msgData.message[0].component.payload.title}} \
-								<li class="listTmplContentHeading"> \
-									{{if msgData.type === "bot_response"}} {{html helpers.convertMDtoHTML(msgData.message[0].component.payload.text)}} {{else}} {{html helpers.convertMDtoHTML(msgData.message[0].component.payload.text)}} {{/if}} \
-									{{if msgData.message[0].cInfo && msgData.message[0].cInfo.emoji}} \
-										<span class="emojione emojione-${msgData.message[0].cInfo.emoji[0].code}">${msgData.message[0].cInfo.emoji[0].title}</span> \
-									{{/if}} \
-								</li> \
-							{{/if}} \
-							{{each(key, msgItem) msgData.message[0].component.payload.elements}} \
-								{{if key<= 2}}\
-									<li class="listTmplContentChild"> \
-										<div class="listLeftContent"> \
-											<div class="listItemTitle">${msgItem.title}</div> \
-											<div class="listItemSubtitle">${msgItem.subtitle}</div> \
-											<div class="listItemPath" type="url" url="${msgItem.default_action.url}">${msgItem.default_action.url}</div> \
-											<div> \
-												<button class="buyBtn" {{if msgItem.buttons[0].type}}type="${msgItem.buttons[0].type}"{{/if}} {{if msgItem.buttons[0].url}}url="${msgItem.buttons[0].url}"{{/if}} {{if msgItem.buttons[0].payload}}value="${msgItem.buttons[0].payload}"{{/if}}>{{if msgItem.buttons[0].title}}${msgItem.buttons[0].title}{{else}}Buy{{/if}}</button> \
-											</div> \
-										</div>\
-										<div class="listRightContent"> \
-											<img src="${msgItem.image_url}" /> \
-										</div> \
-									</li> \
-								{{/if}}\
-							{{/each}} \
-							</li> \
-							{{if msgData.message[0].component.payload.elements.length > 3}}\
-							<li class="viewMoreList"> \
-								<button class="viewMore" url="{{if msgData.message[0].component.payload.buttons[0].url}}${msgData.message[0].component.payload.buttons[0].url}{{/if}}" type="${msgData.message[0].component.payload.buttons[0].type}" value="{{if msgData.message[0].component.payload.buttons[0].payload}}${msgData.message[0].component.payload.buttons[0].payload}{{else}}${msgData.message[0].component.payload.buttons[0].title}{{/if}}">${msgData.message[0].component.payload.buttons[0].title}</button> \
-							</li> \
-							{{/if}}\
-						</ul> \
-					</div> \
-				</li> \
-			{{/if}} \
-		</scipt>';
         if (tempType === "message") {
+			var msgTemplate = '';
+			if(tempData.message) {
+				tempData.message.forEach(function(msgItem){
+					if(msgItem.cInfo && msgItem.type === "text") { 
+						var msg_data = '';
+						var msg_class = '';
+						var msg_icon_html = '';
+						var msg_created_html = '';
+						var msg_html = '';
+						
+						if(tempData.type !== "bot_response") {
+							msg_data = 'id = "msg_' + msgItem.clientMessageId + '"';
+							msg_class = 'fromCurrentUser';
+							msg_html = helpers.convertMDtoHTML(msgItem.cInfo.body);
+						}
+						else {
+							msg_class = 'fromOtherUsers';
+							msg_html = helpers.convertMDtoHTML(msgItem.cInfo.body);
+						}						
+                        if(msgItem.cInfo.attachments){
+                            var className = '';
+                            if(msgItem.cInfo.attachments[0].fileType =="image"){
+                                className = "icon cf-icon icon-photos_active";   
+                            }else if(msgItem.cInfo.attachments[0].fileType =="audio"){
+                                className = "icon cf-icon icon-files_audio"; 
+                            }else if(msgItem.cInfo.attachments[0].fileType =="video"){
+                                className = "icon cf-icon icon-video_active "; 
+                            }else{
+                                if(extension[1]=="xlsx" || extension[1]=="xls" || extension[1]=="docx" || extension[1]=="doc" || extension[1]=="pdf" || extension[1]=="ppsx" || extension[1]=="pptx" || extension[1]=="ppt" || extension[1]=="zip" || extension[1]=="rar"){
+                                    className = "icon cf-icon icon-files_"+extension[1]; 
+                                }else{
+                                    className = "icon cf-icon icon-files_other_doc"; 
+                                }
+                            }
+                            msg_html += '<div class="msgCmpt attachments" fileid="'+msgItem.cInfo.attachments[0].fileId+'"><div class="uploadedFileIcon"> <span class="'+className+'"></span></div><div class="curUseruploadedFileName">'+msgItem.cInfo.attachments[0].fileName+'</div></div>';
+                        }
+						if(tempData.icon) {
+							msg_class += ' with-icon';
+							msg_icon_html = '<div class="profile-photo"> <div class="user-account avtar" style="background-image:url('+ tempData.icon +')"></div> </div>';
+						}
+						
+						if(tempData.createdOn) {
+							msg_created_html = '<div class="extra-info">'+ helpers.formatDate(tempData.createdOn) +'</div>';
+						}
+						if(msgItem.cInfo.emoji) {
+							msg_html = msg_html +'<span class="emojione emojione-'+msgItem.cInfo.emoji[0].code+'"></span>';
+						}
+						
+						msgTemplate += '<li '+ msg_data +' class=" ' + msg_class + '"> \
+                                '+ msg_created_html +' \
+                                '+ msg_icon_html +' \
+                                <div class="messageBubble">\
+                                    '+ msg_html +' \
+                                </div> \
+						</li>';
+					}
+				});
+			}
             return msgTemplate;
         } else if(tempType === "popup"){
+			var popupTemplate = '<div class="kore-auth-popup"><div class="popup_controls"><span class="close-popup" title="Close">&times;</span></div> \
+							<iframe id="authIframe" src=" ' + tempData + '"></iframe></div>';
             return popupTemplate;
-        } else if(tempType === "templatebutton"){
+        }
+		else if(tempType ==="templatebutton"){
+			var buttonTemplate = '';
+			if(tempData.message) {
+				tempData.message.forEach(function(msgItem){
+					if(msgItem.component && msgItem.component.type === "template") { 
+						var msg_data = '';
+						var msg_class = '';
+						var msg_icon_html = '';
+						var msg_created_html = '';
+						var msg_html = '';
+						var inner_html = '';
+						if(tempData.type !== "bot_response") {
+							msg_data = 'id = "msg_' + msgItem.clientMessageId + '"';
+							msg_class = 'fromCurrentUser';
+							msg_html = helpers.convertMDtoHTML(msgItem.component.payload.text);
+						}
+						else {
+							msg_class = 'fromOtherUsers';
+							msg_html = helpers.convertMDtoHTML(msgItem.component.payload.text);
+						}
+						
+						if(tempData.icon) {
+							msg_class += ' with-icon';
+							msg_icon_html = '<div class="profile-photo"> <div class="user-account avtar" style="background-image:url('+ tempData.icon +')"></div> </div>';
+						}
+						
+						if(tempData.createdOn) {
+							msg_created_html = '<div class="extra-info">'+ helpers.formatDate(tempData.createdOn) +'</div>';
+						}
+						if(msgItem.cInfo.emoji) {
+							msg_html = msg_html +'<span class="emojione emojione-'+msgItem.cInfo.emoji[0].code+'"></span>';
+						}
+						msgItem.component.payload.buttons.forEach(function(msgInnerItem) {
+							var value='',url='',type='';
+							if(msgInnerItem.payload){
+								value ='value="'+msgInnerItem.payload+'"';
+							}
+							if(msgInnerItem.url){
+								url = 'url="'+msgInnerItem.url+'"';
+							}
+							if(msgInnerItem.type){
+								type = 'type="'+msgInnerItem.type+'"';
+							}
+							inner_html = inner_html + '<li '+value+' '+url+' '+type+' class="buttonTmplContentChild sendClickReq">\
+									'+ msgInnerItem.title+ '</li>';
+						});
+						buttonTemplate += '<li '+ msg_data +' class=" ' + msg_class + '"> \
+								<div class="buttonTmplContent"> \
+                                '+ msg_created_html +' \
+                                '+ msg_icon_html +' \
+								<ul class="buttonTmplContentBox">\
+									<li class="buttonTmplContentHeading">'+msg_html+'</li>\
+									'+ inner_html +' \
+								</ul>\
+								</div>\
+						</li>';
+					}
+				});
+			}
             return buttonTemplate;
-        } else if(tempType === "templatelist"){
-            return listTemplate;
-        } else if(tempType === "templatequickreply"){
+		}
+		else if(tempType ==="templatequickreply"){
+			var quickReplyTemplate = '';
+			if(tempData.message) {
+				tempData.message.forEach(function(msgItem){
+					if(msgItem.component && msgItem.component.type === "template") { 
+						var msg_data = '';
+						var msg_class = '';
+						var msg_icon_html = '';
+						var msg_created_html = '';
+						var msg_html = '';
+						var inner_html = '';
+						if(tempData.type !== "bot_response") {
+							msg_data = 'id = "msg_' + msgItem.clientMessageId + '"';
+							msg_class = 'fromCurrentUser';
+							msg_html = helpers.convertMDtoHTML(msgItem.component.payload.text);
+						}
+						else {
+							msg_class = 'fromOtherUsers';
+							msg_html = helpers.convertMDtoHTML(msgItem.component.payload.text);
+						}
+						
+						if(tempData.icon) {
+							msg_class += ' with-icon';
+							msg_icon_html = '<div class="profile-photo"> <div class="user-account avtar" style="background-image:url('+ tempData.icon +')"></div> </div>';
+						}
+						
+						if(tempData.createdOn) {
+							msg_created_html = '<div class="extra-info">'+ helpers.formatDate(tempData.createdOn) +'</div>';
+						}
+						if(msgItem.cInfo.emoji) {
+							msg_html = msg_html +'<span class="emojione emojione-'+msgItem.cInfo.emoji[0].code+'"></span>';
+						}
+						msgItem.component.payload.quick_replies.forEach(function(msgInnerItem) {
+							var value='',url='',type='';
+							if(msgInnerItem.payload){
+								value ='value="'+msgInnerItem.payload+'"';
+							}
+							if(msgInnerItem.image_url){
+								url = 'img src="'+'+msgInnerItem.image_url+'+'"';
+							}
+							if(msgInnerItem.content_type){
+								type = 'type="'+msgInnerItem.content_type+'"';
+							}
+							inner_html = inner_html + '<li '+value+' '+url+' '+type+' class="quickReply buttonTmplContentChild sendClickReq">\
+									'+url+' '+ msgInnerItem.title+ '</li>';
+						});
+						quickReplyTemplate += '<li '+ msg_data +' class=" ' + msg_class + '"> \
+								<div class="buttonTmplContent"> \
+                                '+ msg_created_html +' \
+                                '+ msg_icon_html +' \
+								<ul class="buttonTmplContentBox">\
+									<li class="buttonTmplContentHeading">'+msg_html+'</li>\
+									'+ inner_html +' \
+								</ul>\
+								</div>\
+						</li>';
+					}
+				});
+			}
             return quickReplyTemplate;
-        } else {
+		}
+		else if(tempType ==="templatelist"){
+			var listTemplate = '';
+			if(tempData.message) {
+				tempData.message.forEach(function(msgItem){
+					if(msgItem.component && msgItem.component.type === "template") { 
+						var msg_data = '';
+						var msg_class = '';
+						var msg_icon_html = '';
+						var msg_created_html = '';
+						var msg_html = '';
+						var inner_html = '',lastButton = '',count = 0;
+						if(tempData.type !== "bot_response") {
+							msg_data = 'id = "msg_' + msgItem.clientMessageId + '"';
+							msg_class = 'fromCurrentUser';
+							msg_html = helpers.convertMDtoHTML(msgItem.component.payload.text);
+						}
+						else {
+							msg_class = 'fromOtherUsers';
+							msg_html = helpers.convertMDtoHTML(msgItem.component.payload.text);
+						}
+						
+						if(tempData.icon) {
+							msg_class += ' with-icon';
+							msg_icon_html = '<div class="profile-photo"> <div class="user-account avtar" style="background-image:url('+ tempData.icon +')"></div> </div>';
+						}
+						
+						if(tempData.createdOn) {
+							msg_created_html = '<div class="extra-info">'+ helpers.formatDate(tempData.createdOn) +'</div>';
+						}
+						if(msgItem.cInfo.emoji) {
+							msg_html = msg_html +'<span class="emojione emojione-'+msgItem.cInfo.emoji[0].code+'"></span>';
+						}
+						msgItem.component.payload.elements.forEach(function(msgInnerItem) {
+							if(count < 3){
+								count++;
+								var value='',url='',type='';
+								if(msgInnerItem.buttons[0].payload){
+									value ='value="'+msgInnerItem.buttons[0].payload+'"';
+								} else {
+									value ='value="'+msgInnerItem.buttons[0].title+'"';
+								}
+								if(msgInnerItem.buttons[0].url){
+									url = 'url="'+msgInnerItem.buttons[0].url+'"';
+								}
+								if(msgInnerItem.buttons[0].type){
+									type = 'type="'+msgInnerItem.buttons[0].type+'"';
+								}
+								inner_html = inner_html + '<li class="listTmplContentChild"> \
+									<div class="listLeftContent"> \
+										<div class="listItemTitle">'+msgInnerItem.title+'</div> \
+										<div class="listItemSubtitle">'+msgInnerItem.subtitle+'</div> \
+										<div class="listItemPath sendClickReq" type="url" url="'+msgInnerItem.default_action.url+'">'+msgInnerItem.default_action.url+'</div> \
+										<div> \
+											<button '+value+' '+type+' '+url+' class="buyBtn sendClickReq">Buy</button> \
+										</div> \
+									</div>\
+									<div class="listRightContent"> \
+										<img src="'+msgInnerItem.image_url+'" /> \
+									</div> \
+								</li>';
+							}
+						});
+						if(msgItem.component.payload.elements && msgItem.component.payload.elements.length > 3){
+							msgItem.component.payload.buttons.forEach(function(msgLastItem) {
+								var url='',type='',value='';
+								if(msgLastItem.payload){
+									value ='value="'+msgLastItem.payload+'"';
+								} else {
+									value ='value="'+msgLastItem.title+'"';
+								}
+								if(msgLastItem.url){
+									url = 'url="'+msgLastItem.url+'"';
+								}
+								if(msgLastItem.type){
+									type = 'type="'+msgLastItem.type+'"';
+								}
+								lastButton = '<li class="viewMoreList"> \
+									<button '+value+' '+type+' '+url+' class="viewMore sendClickReq">'+msgLastItem.title+'</button> \
+								</li>';
+							});
+						}
+						listTemplate += '<li '+ msg_data +' class=" ' + msg_class + '"> \
+								<div class="listTmplContent"> \
+                                '+ msg_created_html +' \
+                                '+ msg_icon_html +' \
+								<ul class="listTmplContentBox">\
+									<li class="listTmplContentHeading">'+msg_html+'</li>\
+									'+ inner_html +' \
+									'+ lastButton +' \
+								</ul>\
+								</div>\
+						</li>';
+					}
+				});
+			}
+            return listTemplate;
+		}
+		else {
+			var chatWindowTemplate = '<div class="kore-chat-window" id="koreChatWindow"> \
+									<div class="minimized-title"></div> \
+									<div class="minimized"><span class="messages"></span></div> \
+					<div class="kore-chat-header"> \
+						<div class="header-title" title="'+ tempData.chatTitle +'">'+ tempData.chatTitle +'</div> \
+						<div class="chat-box-controls"> \
+													<button class="reload-btn" title="Reconnect"><span></span></button> \
+							<button class="minimize-btn" title="Minimize">&minus;</button> \
+													<button class="expand-btn" title="Expand"><span></span></button>\
+							<button class="close-btn" title="Close">&times;</button> \
+						</div> \
+					</div> \
+					<div class="kore-chat-body"> \
+						<ul class="chat-container"></ul> \
+					</div> \
+                    <div class="typingIndicatorContent"><div class="typingIndicator"></div><img src="../libs/img/3dot.gif"></div> \
+					<div class="kore-chat-footer"> \
+						<div class="footerContainer pos-relative"> \
+							<div class="chatInputBox" contenteditable="true" placeholder="'+ tempData.botMessages.message +'"></div> \
+                            <div class="attachment"></div> \
+                            <div class="sdkFooterIcon microphoneBtn"> \
+                                <button class="notRecordingMicrophone"> \
+                                    <i class="fa fa-microphone fa-lg"></i> \
+                                </button> \
+                                <button class="recordingMicrophone"> \
+                                    <i class="fa fa-microphone fa-lg"></i> \
+                                    <img src="../libs/img/audio-record.gif" style="height:10px;"> \
+                                </button> \
+                                <div id="textFromServer"></div> \
+                            </div> \
+                            <div class="sdkFooterIcon"> \
+                                <button class="sdkAttachment attachmentBtn"> \
+                                    <i class="fa fa fa-paperclip"></i><input type="file" name="Attachment" class="filety captureAttachmnts" id="captureAttachmnts"> \
+                                </button> \
+                            </div> \
+							<div class="chatSendMsg">Press enter to send</div> \
+						</div> \
+					</div> \
+				</div>';
             return chatWindowTemplate;
         }
     };
-    function IsJsonString(){
-		try {
-			JSON.parse(str);
-		} catch (e) {
-			return false;
-		}
-		return true;
-	}
+    
     var chatInitialize;
-	function insertHtmlData (_txtBox, _html) {
+    function insertHtmlData (_txtBox, _html) {
 		var _input = _txtBox;
 		sel = window.getSelection();
 		if (sel.rangeCount > 0) {
@@ -1214,13 +1360,14 @@ function koreBotChat() {
     function strSplit(str){
         return (str.split('.'));
     }
-    
+	
     window.onbeforeunload = function(){
-        if (chatInitialize && $(chatInitialize.config.chatContainer).length > 0) {
+        if (chatInitialize && document.querySelector('.kore-chat-window') !== null) {
             chatInitialize.destroy();
             return null;
         }
     }
+	
 	this.addListener = function(evtName, trgFunc) {
 		if (!_eventQueue) {
 			_eventQueue = {};
@@ -1249,8 +1396,9 @@ function koreBotChat() {
 			}
 		}
 	}
+	
     this.show = function (cfg) {
-        if ($('body').find('.kore-chat-window').length > 0)
+        if (document.querySelector('.kore-chat-window') !== null)
         {
             return false;
         }
@@ -1263,8 +1411,7 @@ function koreBotChat() {
             chatInitialize.destroy();
         }
     };
-
-    /*************************************       Microphone code      **********************************************/
+    /************************************* Microphone code **********************************************/
     function micEnable() {
         if (!navigator.getUserMedia) {
             navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
@@ -1318,11 +1465,11 @@ function koreBotChat() {
     function cancel() {
         // Stop the regular sending of audio (if present) and disconnect microphone
         clearInterval(intervalKey);
-        if ($('.recordingMicrophone')) {
-            $('.recordingMicrophone').css('display', 'none');
+        if (document.getElementsByClassName('recordingMicrophone')) {
+            document.getElementsByClassName('recordingMicrophone')[0].style.display = 'none';
         }
-        if ($('.notRecordingMicrophone')) {
-            $('.notRecordingMicrophone').css('display', 'block');
+        if (document.getElementsByClassName('notRecordingMicrophone')) {
+            document.getElementsByClassName('notRecordingMicrophone')[0].style.display = 'block';
         }
         if (rec) {
             rec.stop();
@@ -1375,8 +1522,8 @@ function koreBotChat() {
             console.log('User connected');
             _user_connection = true;
             rec.record();
-            $('.recordingMicrophone').css('display', 'block');
-            $('.notRecordingMicrophone').css('display', 'none');
+            document.getElementsByClassName('recordingMicrophone')[0].style.display = 'block';
+            document.getElementsByClassName('notRecordingMicrophone')[0].style.display = 'none';
             console.log('recording...');
             intervalKey = setInterval(function() {
                 rec.export16kMono(function(blob) {
@@ -1398,10 +1545,9 @@ function koreBotChat() {
                 if (res.status === 0) {
                     if (res.result.final) {
                         var final_result = res.result.hypotheses[0].transcript;
-                        $('.chatInputBox').text($('.chatInputBox').text() + ' '+ final_result);
-
+                        document.getElementsByClassName('chatInputBox')[0].textContent  = document.getElementsByClassName('chatInputBox')[0].textContent + ' '+ final_result;
                     } else {
-                        $('.chatInputBox').text(res.result.hypotheses[0].transcript);
+                        document.getElementsByClassName('chatInputBox')[0].textContent = res.result.hypotheses[0].transcript;
                         console.log('Not final: ', res.result.hypotheses[0].transcript);
                     }
                 } else {
@@ -1423,8 +1569,8 @@ function koreBotChat() {
 
     function stop() {
         clearInterval(intervalKey);
-        $('.recordingMicrophone').css('display', 'none');
-        $('.notRecordingMicrophone').css('display', 'block');
+        document.getElementsByClassName('recordingMicrophone')[0].style.display = 'none';
+        document.getElementsByClassName('notRecordingMicrophone')[0].style.display = 'block';
 
         if (rec) {
             rec.stop();
@@ -1441,11 +1587,11 @@ function koreBotChat() {
         }
     };
 
-    $(window).on('beforeunload', function() {
+    window.onbeforeunload = function(e) {
         cancel();
-    });
+    };
 
-    /*************************************    Microphone code end here    **************************************/
+    /*************************************  Microphone code end here ******************************************/
 
     /*******************************    Function for Attachment ***********************************************/
     function cnvertFiles(_this,_file, customFileName) {   
@@ -1458,7 +1604,7 @@ function koreBotChat() {
         }
         if (_file && customFileName) {
             _file.name = customFileName;
-        }        
+        }
         if (_file && (_file.name|| customFileName)) {
             var _fileName = customFileName || _file.name;
             var fileType = _fileName.split('.').pop().toLowerCase();
@@ -1506,6 +1652,7 @@ function koreBotChat() {
                             }
                             video.src = url;                                          // start video load
                         } else {
+                            recState.duration = '';
                             (URL || webkitURL).revokeObjectURL(url); //fallback for webkit
                             getFileToken(_this,_file, recState);
                         }
@@ -1533,7 +1680,7 @@ function koreBotChat() {
             } else{
                 alert("SDK not supported this type of file");
             }
-        }        
+        }
     };
     function getUID(pattern) {
         var _pattern = pattern || 'xxxxyx';
@@ -1548,7 +1695,6 @@ function koreBotChat() {
         var thecanvas = document.createElement("canvas");
         thecanvas.height = 180;
         thecanvas.width = 320;
-
         var context = thecanvas.getContext('2d');
         context.drawImage(src, 0, 0, thecanvas.width, thecanvas.height);
         var dataURL = thecanvas.toDataURL();
@@ -1556,15 +1702,16 @@ function koreBotChat() {
     };
     function acceptAndUploadFile  (_this,file, recState) {
         var _scope = _this, ele;
+        globalRecState = recState;
         var uc = getfileuploadConf(recState);
         uc.chunkUpload = file.size > appConsts.CHUNK_SIZE;
         uc.chunkSize = appConsts.CHUNK_SIZE;
         uc.file = file;
         if (uc.chunkUpload) {
             notifyFlie(_scope,recState);
-            ele = $('.chatInputBox');
-            initiateRcorder(recState, ele);
-            ele.uploader(uc);
+            ele = document.getElementsByClassName('chatInputBox')[0];
+            initiateRcorder(_scope,recState, ele);
+            uploader(uc);
         } else {
             var reader = new FileReader();
             reader.onloadend = function (evt) {
@@ -1580,26 +1727,24 @@ function koreBotChat() {
         }
     };
     function getFileToken(_obj, _file, recState){
-         $.ajax({type: "POST",
-            url: koreAPIUrl+"1.1/attachment/file/token",
-            dataType: "json",
-            headers: {
-                Authorization: bearerToken
-            },
-            success: function (response) {
-               fileToken = response.fileToken;
-               acceptAndUploadFile(_obj, _file, recState);
-            },
-            error: function (msg) {
-                console.log("Oops, something went horribly wrong");
+        var xhttp=new XMLHttpRequest();
+        xhttp.onreadystatechange = function(response) {
+            if (this.readyState == 4 && this.status == 200) {
+                var resposeArr = JSON.parse(this.response);
+                fileToken = resposeArr.fileToken;
+                acceptAndUploadFile(_obj, _file, recState);
             }
-        });
+        };        
+        xhttp.open("POST", koreAPIUrl+"1.1/attachment/file/token", true);
+        xhttp.setRequestHeader('Content-Type', 'json');
+        xhttp.setRequestHeader('Authorization', bearerToken);
+        xhttp.send();
     }
     function getfileuploadConf (_recState) {
         appConsts.UPLOAD = {
-            "FILE_ENDPOINT":koreAPIUrl+"1.1/attachment/file",
-            "FILE_TOKEN_ENDPOINT":koreAPIUrl+"1.1/attachment/file/token",
-            "FILE_CHUNK_ENDPOINT":koreAPIUrl+"1.1/attachment/file/:fileID/chunk"       
+            "FILE_ENDPOINT": koreAPIUrl+"1.1/attachment/file",
+            "FILE_TOKEN_ENDPOINT": koreAPIUrl+"1.1/attachment/file/token",
+            "FILE_CHUNK_ENDPOINT": koreAPIUrl+"1.1/attachment/file/:fileID/chunk"       
         }
         _accessToke = "bearer " + accessToken;
         _uploadConfg = {};        
@@ -1622,7 +1767,8 @@ function koreBotChat() {
         var _this = _this;
         var _data = {};
         _data.meta = {
-            thumbNail: _recState.resulttype ? _recState.resulttype : undefined
+            thumbNail: _recState.resulttype ? _recState.resulttype : undefined,
+            duration: _recState.duration
         };
         _data.values = {
             componentId: _recState.mediaName,
@@ -1631,20 +1777,20 @@ function koreBotChat() {
             componentData: {
                 filename: _recState.name
             }
-
         };
         if (_recState.componentSize) {
             _data.values.componentSize = _recState.componentSize;
         }
         onComponentReady(_this,_data);
     };
-    function initiateRcorder (_recState, ele) {
-        var _scope = this;
+    function initiateRcorder (_this,_recState, ele) {
+        var _scope = _this;
         ele = ele || _scope.ele;
-        ele.on('success.ke.uploader', function (e) {
+        ele.addEventListener('success.ke.uploader', function (e) {
             onFileToUploaded(_scope, e, _recState);
         });
-        ele.on('error.ke.uploader', onUploadError);
+        ele.addEventListener('progress.ke.uploader', onUploadProgress);
+        ele.addEventListener('error.ke.uploader', onUploadError);
     };
     function onFileToUploaded (_this,evt, _recState) {
         var _this = _this;
@@ -1658,6 +1804,10 @@ function koreBotChat() {
             notifyfileCmpntRdy(_this,_recState, _tofileId);
         }
     };
+
+    function onUploadProgress (_this,evt) {
+
+    };
     function onUploadError (_this,evt, _recState) {
         var _scope = _this;
         _recfileLisnr.onError({
@@ -1668,22 +1818,21 @@ function koreBotChat() {
     function onError () {
         alert("Failed to upload content. Try again");
         attachmentInfo = {};
-        $('.attachment').html('');
+        document.getElementsByClassName('attachment').innerHTML = '';
         fileUploaderCounter  = 0;
     };
     function onComponentReady (_this,data) {
         var _this = _this,
                 _src,
                 _imgCntr, _img, base64Matcher, http,
-                _cmptVal, _cmpt;
+                _cmptVal, _cmpt='';
         if (!_cmpt) {
-            _cmpt = $('<div/>').attr({
-                'class': 'msgCmpt ' + data.values.componentType + ' ' + data.values.componentId
-            });
-            _cmpt.data('value', data.values);
+            _cmpt = document.createElement('div');
+            _cmpt.setAttribute('class','msgCmpt ' + data.values.componentType + ' ' + data.values.componentId);
+            _cmpt.setAttribute('data-html','true');
             
             if (!data.values.componentFileId && data.values.componentType !== 'contact' && data.values.componentType !== 'location' && data.values.componentType !== 'filelink' && data.values.componentType !== 'alert' && data.values.componentType !== 'email') {
-                _cmpt.append('<div class="upldIndc"></div>');
+                _cmpt.innerHTML = '<div class="upldIndc"></div>';
             }
             if (data.values.componentType === 'attachment') {
                 var fileType, _fn;
@@ -1693,42 +1842,63 @@ function koreBotChat() {
                     fileType = data.values.componentData.filename.split('.').pop().toLowerCase();
                 }
                 if (fileType === 'xls' || fileType === 'xlsx') {
-                    _cmpt.append('<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_excel"></span></div>');                    
-                    _cmpt.append('<div class="uploadedFileName">' + data.values.componentData.filename + '</div>');
+                    _cmpt.innerHTML +='<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_excel"></span></div>';                    
+                    _cmpt.innerHTML +='<div class="uploadedFileName">' + data.values.componentData.filename + '</div>';
                 } else if (fileType === 'docx' || fileType === 'doc') {
-                    _cmpt.append('<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_word"></span></div>');
-                    _cmpt.append('<div class="uploadedFileName">' + data.values.componentData.filename + '</div>');
+                    _cmpt.innerHTML +='<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_word"></span></div>';
+                    _cmpt.innerHTML +='<div class="uploadedFileName">' + data.values.componentData.filename + '</div>';
                 }                 
                 else if (fileType === 'pdf') {
-                    _cmpt.append('<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_pdf"></span></div>');
-                    _cmpt.append('<div class="uploadedFileName">' + data.values.componentData.filename + '</div>');
+                    _cmpt.innerHTML +='<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_pdf"></span></div>';
+                    _cmpt.innerHTML +='<div class="uploadedFileName">' + data.values.componentData.filename + '</div>';
                 } else if (fileType === 'ppsx' || fileType === 'pptx' || fileType === 'ppt') {
-                    _cmpt.append('<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_ppt"></span></div>');
-                    _cmpt.append('<div class="uploadedFileName">' + data.values.componentData.filename + '</div>');
+                    _cmpt.innerHTML +='<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_ppt"></span></div>';
+                    _cmpt.innerHTML +='<div class="uploadedFileName">' + data.values.componentData.filename + '</div>';
                 } else if (fileType === 'zip' || fileType === 'rar') {
-                    _cmpt.append('<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_zip"></span></div>');
-                    _cmpt.append('<div class="uploadedFileName">' + data.values.componentData.filename + '</div>');
+                    _cmpt.innerHTML +='<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_zip"></span></div>';
+                    _cmpt.innerHTML +='<div class="uploadedFileName">' + data.values.componentData.filename + '</div>';
                 } else {
-                    _cmpt.append('<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_other_doc"></span></div>');
-                    _cmpt.append('<div class="uploadedFileName">' + data.values.componentData.filename + '</div>');
+                    _cmpt.innerHTML +='<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_other_doc"></span></div>';
+                    _cmpt.innerHTML +='<div class="uploadedFileName">' + data.values.componentData.filename + '</div>';
                 }
             } 
             if (data.values.componentType === 'image') {
-                _cmpt.append('<div class="uploadedFileIcon"><span class="icon cf-icon icon-photos_active"></span></div>');
-                _cmpt.append('<div class="uploadedFileName">' + data.values.componentData.filename + '</div>');
+                _cmpt.innerHTML +='<div class="uploadedFileIcon"><span class="icon cf-icon icon-photos_active"></span></div>';
+                _cmpt.innerHTML +='<div class="uploadedFileName">' + data.values.componentData.filename + '</div>';
             }
             if (data.values.componentType === 'audio') {
-                _cmpt.append('<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_audio"></span></div>');
-                _cmpt.append('<div class="uploadedFileName">' + data.values.componentData.filename + '</div>');
+                _cmpt.innerHTML +='<div class="uploadedFileIcon"><span class="icon cf-icon icon-files_audio"></span></div>';
+                _cmpt.innerHTML +='<div class="uploadedFileName">' + data.values.componentData.filename + '</div>';
             }
             if (data.values.componentType === 'video') {
-                _cmpt.append('<div class="uploadedFileIcon"><span class="icon cf-icon icon-video_active"></span></div>');
-                _cmpt.append('<div class="uploadedFileName">' + data.values.componentData.filename + '</div>');
+                _cmpt.innerHTML +='<div class="uploadedFileIcon"><span class="icon cf-icon icon-video_active"></span></div>';
+                _cmpt.innerHTML +='<div class="uploadedFileName">' + data.values.componentData.filename + '</div>';
             } 
+        } else {
+            _cmptVal = _cmpt.data('value');
+            _cmptVal.componentFileId = data.values.componentFileId;
+            _cmpt.data('value', _cmptVal);
+            if (_cmptVal.componentFileId) {
+                _cmpt.find('.upldIndc').remove();
+            }
+            if (_cmptVal.componentType === "audio" || _cmptVal.componentType === "video") {
+                _cmpt.find(".msgCmptTxt").text(_cmptVal.duration);
+                data.values.componentLength = _cmptVal.componentLength; //_cmptVal.duration;
+            }
         }
-        _cmpt.append('<div class="removeAttachment"><span>&times;</span></div>');
-        $('.footerContainer').find('.attachment').html(_cmpt);
-        $('.chatInputBox').focus();
+        _cmpt.innerHTML +='<div class="removeAttachment"><span>&times;</span></div>';
+        if(!document.getElementsByClassName('attachment')[0].innerHTML.length){
+             document.getElementsByClassName('attachment')[0].appendChild(_cmpt);
+            document.getElementsByClassName('chatInputBox')[0].focus();
+            _removeAttachments = document.querySelector('.removeAttachment');
+            _removeAttachments.addEventListener('click',function () {
+                this.parentElement.remove();
+                attachmentInfo = {};
+                fileUploaderCounter  = 0;
+                document.getElementById("captureAttachmnts").value = "";
+                document.getElementsByClassName('kore-chat-window')[0].classList.remove('kore-chat-attachment');
+            })
+        }       
         attachmentInfo.fileName = data.values.componentData.filename;
         attachmentInfo.fileType = data.values.componentType;
     };
@@ -1747,15 +1917,17 @@ function koreBotChat() {
             data: _imageCntn,
             type: 'image/png'
         };
-        ele = $('.chatInputBox');
-        initiateRcorder(_recState, ele);
-        ele.uploader(_uc);
+        _uc.data.thumbnailExtension = "png";
+        ele = document.getElementsByClassName('chatInputBox')[0];
+        initiateRcorder(_scope,_recState, ele);
+        uploader(_uc);
     };
     function notifyfileCmpntRdy (_this,_recState, _tofileId) {
         var _this = _this;
         var _data = {};
         _data.meta = {
-            thumbNail: _recState.resulttype
+            thumbNail: _recState.resulttype,
+            duration: _recState.duration
         };
         _data.values = {
             componentId: _recState.mediaName,
@@ -1803,31 +1975,36 @@ function koreBotChat() {
         return body;
     };
     function Uploader(element, options) {
-        this.options = options;
-        this.$element = element;
-        if (!this.options.chunkUpload) {
-            startUpload(this);
+        _this.options = options;
+        _this.$element = element;
+        if (!_this.options.chunkUpload) {
+            startUpload(_this);
         } else {
-            startChunksUpload(this);
+            startChunksUpload(_this);
         }
     }
     var _cls = Uploader.prototype;
-    _cls.events = {
-        error: $.Event('error.ke.uploader'),
-        progressChange: $.Event('progress.ke.uploader'),
-        success: $.Event('success.ke.uploader')
+     _cls.events = {
+        error: ('error.ke.uploader'),
+        progressChange: ('progress.ke.uploader'),
+        success: ('success.ke.uploader')
     };
     function getConnection (_this) {
         return new kony.net.HttpRequest();
     };
 
     function loadListener (_this, evt) {
-        _this.events.success.params = $.parseJSON(evt.target.response);
+        _this.events = {
+            error: {'type':'error.ke.uploader'},
+            progressChange: {'type':'progress.ke.uploader'},
+            success: {'type':'success.ke.uploader'}
+        };
+        _this.events.success.params = JSON.parse(evt.target.response);
         attachmentInfo.fileId = _this.events.success.params.fileId;
-        $('.kore-chat-window').addClass('kore-chat-attachment');
         fileUploaderCounter = 1;
-        $('.upldIndc').remove();
-        _this.$element.trigger(_this.events.success);
+        document.getElementsByClassName('upldIndc')[0].remove();
+        document.getElementsByClassName('kore-chat-window')[0].classList.add('kore-chat-attachment');
+        onFileToUploaded(_this, _this.events.success,globalRecState);
     };
 
     function errorListener (_this,evt) {
@@ -1849,7 +2026,7 @@ function koreBotChat() {
                 _mdat = new MultipartData();
         _conc.addEventListener('load', function (evt) {
             if (evt.target.status === 200) {
-                if (_scope.$element.parent().length) {
+                if (_scope.$element[0].parentElement) {
                     loadListener(_scope,evt);
                 }
             } else {
@@ -1885,7 +2062,7 @@ function koreBotChat() {
         _conc.addEventListener('load', function (evt) {
             if (evt.target.status === 200) {
                 _scope.currChunk++;
-                if (!_scope.$element.parent().length) {
+                if (!_scope.$element[0].parentElement) {
                     return;
                 } else if (_scope.currChunk === _scope.totalChunks) {
                     commitFile(_scope);
@@ -1925,10 +2102,10 @@ function koreBotChat() {
         var reader = new FileReader();
         var blob = file.slice(start, stop);
         reader.onloadend = function (evt) {
-            if (evt.target.readyState === FileReader.DONE && _scope.$element.parent().length) { // DONE == 2
+            if (evt.target.readyState === FileReader.DONE && _scope.$element[0].parentElement) { // DONE == 2
                 _scope.chunk = evt.target.result;
                 _scope.chunk = _scope.chunk.replace(/data:;base64,/, '');
-                if (_scope.currChunk < _scope.totalChunks && _scope.$element.parent().length) {
+                if (_scope.currChunk < _scope.totalChunks && _scope.$element[0].parentElement) {
                     uploadChunk(_scope);
                 }
             } else {
@@ -1950,7 +2127,7 @@ function koreBotChat() {
                 _scope.totalChunks = Math.floor(_scope.options.file.size / _scope.options.chunkSize) + 1;
                 _scope.currChunk = 0;
                 _scope.options.chunkUrl = _scope.options.chunkUrl.replace(':token', _scope.messageToken);
-                if (_scope.$element.parent().length) {
+                if (_scope.$element[0].parentElement) {
                     initUploadChunk(_scope);
                 }
             } else {
@@ -1976,7 +2153,7 @@ function koreBotChat() {
             }, false);
         }
         _conc.addEventListener('load', function (evt) {
-            if (_scope.$element.parent().length) {
+            if (_scope.$element[0].parentElement) {
                 loadListener(_scope,evt);
             }
         }, false);
@@ -2000,17 +2177,16 @@ function koreBotChat() {
         _conc.send(_mdat.toString());
     };
 
-    var old = $.fn.uploader;
-
-    $.fn.uploader = function (option) {
+    function uploader (option) {
         var _args = Array.prototype.slice.call(arguments, 1);
-        return this.each(function () {
-            var $this = $(this),
+        var l = document.getElementsByClassName('chatInputBox').length;
+        for ( i = 0 ; i < l; i++ ) {
+            var $this = document.getElementsByClassName('chatInputBox'),
                     data = '';//$this.data('ke.uploader'),
                     options = typeof option === 'object' && option;
 
             if (!data) {
-                $this.data('ke.uploader', (data = new Uploader($this, options)));
+                Uploader($this, options);
             } else if (option) {
                 if (typeof option === 'string' && data[option]) {
                     data[option].apply(data, _args);
@@ -2019,12 +2195,12 @@ function koreBotChat() {
                 }
             }
             return option && data[option] && data[option].apply(data, _args);
-        });
+        }
     };
 
-    $.fn.uploader.Constructor = Uploader;
+    uploader.Constructor = Uploader;
 
-    $.fn.uploader.noConflict = function () {
+    uploader.noConflict = function () {
         $.fn.uploader = old;
         return this;
     };
@@ -2060,6 +2236,7 @@ function koreBotChat() {
         HTTP_CONTENT_TYPE_JSON: "application/json",
         HTTP_CONTENT_TYPE: "content-type"
     };
+   
     +function() {
         function getHTTPConnecton() {
             var xhr = false;
@@ -2152,7 +2329,8 @@ function koreBotChat() {
         getId: function() { //Get Current Form Id
             return $FM.currForm && $FM.currForm.id;
         }
-    };
+    };   
+
     kony.initConfig = function(newConf) {
         for (var prop in newConf) {
             if (newConf.hasOwnProperty(prop) && conf.hasOwnProperty(prop)) {
@@ -2167,7 +2345,7 @@ function koreBotChat() {
 
     /********************************  Code end here for attachment *******************************************/
     return {
-		addListener: addListener,
+        addListener: addListener,
 		removeListener: removeListener,
 		show: show,
         destroy: destroy
